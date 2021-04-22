@@ -38,6 +38,7 @@
  ****************************************************************************/
 
 #include <stdio.h>
+#include <stdint.h>
 #include <pthread.h>
 #include "ostest.h"
 
@@ -56,10 +57,17 @@
  ****************************************************************************/
 
 static pthread_key_t g_pthread_key;
+static int           g_pthread_key_destr_called;
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static void specific_destruct(void *ptr)
+{
+  if (0xcafebabe == (uintptr_t)ptr)
+    g_pthread_key_destr_called++;
+}
 
 static void *thread_func(FAR void *parameter)
 {
@@ -100,9 +108,11 @@ void specific_test(void)
 #endif
   int ret;
 
+  g_pthread_key_destr_called = 0;
+
   /* Create the pthread key */
 
-  ret = pthread_key_create(&g_pthread_key, NULL);
+  ret = pthread_key_create(&g_pthread_key, specific_destruct);
   if (ret != 0)
     {
       printf("ERROR: pthread_key_create() failed: %d\n", ret);
@@ -146,6 +156,13 @@ void specific_test(void)
 #else
   pthread_join(thread, NULL);
 #endif
+
+  /* Check destructor called */
+
+  if (g_pthread_key_destr_called == 0)
+    {
+      printf("ERROR: pthread key destructor failed\n");
+    }
 
   /* Re-check the thread-specific data */
 
